@@ -115,9 +115,7 @@ Para "delete": {"id":N}.`;
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
-          model:"claude-sonnet-4-20250514",
-          max_tokens:1000,
-          system:systemPrompt,
+          system: systemPrompt,
           messages:[
             ...messages.map(m=>({ role:m.role==="assistant"?"assistant":"user", content:m.text })),
             { role:"user", content:userMsg }
@@ -125,7 +123,7 @@ Para "delete": {"id":N}.`;
         })
       });
       const data = await res.json();
-      const raw = data.content?.[0]?.text || "No pude procesar tu solicitud.";
+      const raw = data.text || "No pude procesar tu solicitud.";
       const actionMatch = raw.match(/<ACTION>([\s\S]*?)<\/ACTION>/);
       const displayText = raw.replace(/<ACTION>[\s\S]*?<\/ACTION>/g,"").trim();
 
