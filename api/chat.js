@@ -25,10 +25,16 @@ export default async function handler(req, res) {
     );
 
     const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No pude procesar tu solicitud.';
-
+    
+    // Devolver respuesta completa para debug
+    if (!data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      return res.status(200).json({ text: 'DEBUG: ' + JSON.stringify(data) });
+    }
+    
+    const text = data.candidates[0].content.parts[0].text;
     return res.status(200).json({ text });
+
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ text: 'ERROR: ' + error.message });
   }
 }
