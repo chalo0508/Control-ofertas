@@ -1,6 +1,5 @@
 // pages/api/chat.js
 export default async function handler(req, res) {
-  // Solo POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -12,86 +11,76 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Messages inválidos' });
     }
 
-    // Si el cliente envía un modelo explícito, lo usamos; si no, pedimos al endpoint de modelos el primero disponible
+    // Si el cliente envía un modelo explícito, lo usamos directamente
     let modelToUse = requestedModel || null;
 
+    // Si no se envió modelo, consultamos OpenRouter para elegir uno disponible
     if (!modelToUse) {
-      // Llamada interna al endpoint que lista modelos (puedes reemplazar por llamada directa a OpenRouter si prefieres)
-      const modelsResp = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/models`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`
-        }
+      const modelsResp = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}` }
       });
 
-      // Si la llamada local falla, intentamos directamente OpenRouter
+      const modelsData = await modelsResp.json();
+
       if (!modelsResp.ok) {
-        // fallback: pedir directamente a OpenRouter
-        const direct = await fetch('https://openrouter.ai/api/v1/models', {
-          headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}` }
-        });
-        const directData = await direct.json();
-        const directModels = Array.isArray(directData) ? directData : (directData?.models || []);
-        const freeDirect = directModels.filter(m => (m.id || '').toString().toLowerCase().includes(':free'));
-        modelToUse = freeDirect.length > 0 ? freeDirect[0].id : (directModels[0]?.id || null);
-      } else {
-        const modelsData = await modelsResp.json();
-        const chosen = modelsData?.chosen_model;
-        modelToUse = chosen?.id || chosen?.model || null;
+        console.error('OPENROUTER MODELS ERROR:', modelsData);
+        return res.status(modelsResp.status || 500).json({ error: modelsData });
       }
+
+      const models = Array.isArray(modelsData) ? modelsData : (modelsData.models || []);
+      // Buscar primer modelo que contenga ':free' (si existe)
+      const freeModel = models.find(m => (m.id || '').toString().toLowerCase().includes(':free'));
+      modelToUse = freeModel?.id || models[0]?.id || null;
     }
 
-    // Si aún no hay modelo, devolver error claro
     if (!modelToUse) {
       return res.status(500).json({
-        error: 'No se pudo determinar un modelo disponible. Revisa tu API key o la respuesta de /api/models.'
+        error: 'No se pudo determinar un modelo disponible. Revisa tu API key o la respuesta de OpenRouter.'
       });
     }
 
-    // Construir payload para OpenRouter
+    // Construir mensajes para el endpoint de chat
+    const chatMessages = [
+      { role: 'system', content: system || 'Eres un asistente útil.' },
+      ...messages.map(m => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content
+      }))
+    ];
+
     const payload = {
       model: modelToUse,
-      messages: [
-        { role: 'system', content: system || 'Eres un asistente útil.' },
-        ...messages.map(m => ({
-          role: m.role === 'assistant' ? 'assistant' : 'user',
-          content: m.content
-        }))
-      ],
+      messages: chatMessages,
       max_tokens: 1000,
       temperature: 0.7
     };
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const chatResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        // Opcionales: ajusta o elimina según tu entorno
-        'HTTP-Referer': process.env.REFERER || 'https://control-ofertas.vercel.app',
-        'X-Title': 'Control Ofertas'
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`
       },
       body: JSON.stringify(payload)
     });
 
-    const data = await response.json();
+    const chatData = await chatResp.json();
 
-    if (!response.ok) {
-      console.error('OPENROUTER ERROR (chat):', data);
-      return res.status(response.status).json({ error: data });
+    if (!chatResp.ok) {
+      console.error('OPENROUTER CHAT ERROR:', chatData);
+      return res.status(chatResp.status || 500).json({ error: chatData });
     }
 
-    const text = data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || null;
+    const text = chatData?.choices?.[0]?.message?.content || chatData?.choices?.[0]?.text || null;
 
     if (!text) {
-      return res.status(500).json({ error: 'La IA no devolvió texto', debug: data });
+      return res.status(500).json({ error: 'La IA no devolvió texto', debug: chatData });
     }
 
-    return res.status(200).json({ text, model: modelToUse, raw: data });
-  } catch (error) {
-    console.error('SERVER ERROR (chat):', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(200).json({ text, model: modelToUse, raw: chatData });
+  } catch (err) {
+    console.error('SERVER ERROR (chat):', err);
+    return res.status(500).json({ error: err.message });
   }
 }
-
 
