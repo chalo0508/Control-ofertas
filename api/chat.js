@@ -26,7 +26,7 @@ export default async function handler(req, res) {
         'X-Title': 'Control Ofertas'
       },
       body: JSON.stringify({
-        model: 'meta-llama/llama-3.3-70b-instruct:free', // modelo válido
+        model: 'openai/gpt-3.5-turbo', // modelo estable y disponible
 
         messages: [
           {
