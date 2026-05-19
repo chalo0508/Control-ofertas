@@ -195,7 +195,7 @@ Para "delete": {"id":N}.`;
       {/* Header */}
       <div style={{ width:"100%", maxWidth:1100, marginBottom:20 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10, flexWrap:"wrap" }}>
-          <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#3b82f6,#1d4ed8)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, boxShadow:"0 0 20px #3b82f644", flexShrink:0 }}>🏛️</div>
+          <img src="/logo.png" alt="Ingerecons" style={{ height:44, maxWidth:180, objectFit:"contain", flexShrink:0 }} />
           <div>
             <div style={{ color:"#f1f5f9", fontWeight:800, fontSize:20, letterSpacing:-0.5 }}>Control de Ofertas</div>
             <div style={{ color:"#64748b", fontSize:12 }}>Compras Públicas · Asistente IA · En vivo 🟢</div>
