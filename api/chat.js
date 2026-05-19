@@ -13,7 +13,7 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'openrouter/owl-alpha',
+        model: 'meta-llama/llama-3.1-8b-instruct:free',
         messages: [
           { role: 'system', content: system },
           ...messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
