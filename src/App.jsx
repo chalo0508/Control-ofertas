@@ -4,6 +4,7 @@ import { supabase } from "./supabase.js";
 const TODAY = new Date();
 
 function formatMoney(n) {
+  if (!n || n === 0) return "—";
   return new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 }
 
@@ -14,10 +15,10 @@ function daysLeft(dateStr) {
   return Math.ceil((d - TODAY) / (1000 * 60 * 60 * 24));
 }
 
-function DeadlineBadge({ offer }) {
-  const days = daysLeft(offer.fechaMaxima);
+function DeadlineBadge({ dateStr }) {
+  const days = daysLeft(dateStr);
   let label, color;
-  if (days === null) { label = "Sin fecha"; color = "#64748b"; }
+  if (days === null) { label = "Aún no"; color = "#64748b"; }
   else if (days < 0) { label = "Vencida"; color = "#ef4444"; }
   else if (days <= 3) { label = `¡${days}d!`; color = "#f97316"; }
   else if (days <= 7) { label = `${days} días`; color = "#eab308"; }
@@ -52,20 +53,17 @@ export default function App() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior:"smooth" }); }, [messages]);
 
-  // Load offers from Supabase on mount + realtime subscription
   useEffect(() => {
     fetchOffers();
     const channel = supabase
-      .channel('ofertas-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ofertas' }, () => {
-        fetchOffers();
-      })
+      .channel("ofertas-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "ofertas" }, () => { fetchOffers(); })
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, []);
 
   async function fetchOffers() {
-    const { data, error } = await supabase.from('ofertas').select('*').order('id', { ascending: true });
+    const { data, error } = await supabase.from("ofertas").select("*").order("id", { ascending: true });
     if (!error && data) setOffers(data);
     setLoadingData(false);
   }
@@ -84,19 +82,21 @@ export default function App() {
 
     const systemPrompt = `Eres un asistente inteligente para gestionar un control de ofertas de Compras Públicas (licitaciones en Ecuador).
 
-Ofertas actuales en la base de datos:
+Ofertas actuales:
 ${JSON.stringify(offers, null, 2)}
 
 Fecha de hoy: ${TODAY.toISOString().split("T")[0]}
 
 Campos de una oferta:
 - id: número (solo para edit/delete, no incluir en add)
-- proyecto: texto
 - entidad: texto (entidad que contrata)
+- proyecto: texto (objeto del contrato)
+- codigoProceso: texto (código del proceso licitatorio)
 - monto: número USD
+- fechaMaxima: fecha YYYY-MM-DD (fecha máxima de presentación)
+- fechaSubida: fecha YYYY-MM-DD o "Aún no" (fecha de presentación)
+- fechaAdjudicacion: fecha YYYY-MM-DD o "Aún no" (fecha estimada de adjudicación)
 - estadoSubida: "Aún no" | "En proceso" | "Subida"
-- fechaSubida: fecha YYYY-MM-DD o "Aún no"
-- fechaMaxima: fecha YYYY-MM-DD (fecha límite de entrega)
 - resultado: "Pendiente" | "Ganamos" | "Perdimos"
 
 Responde en español, sé conciso y amigable.
@@ -106,7 +106,7 @@ Si hay que modificar datos, incluye al final:
 {"action":"add"|"edit"|"delete"|"none","data":{...}}
 </ACTION>
 
-Para "add": todos los campos excepto id (defaults: estadoSubida="En proceso", fechaSubida="Aún no", resultado="Pendiente").
+Para "add": todos los campos excepto id (defaults: estadoSubida="En proceso", fechaSubida="Aún no", fechaAdjudicacion="Aún no", codigoProceso="", resultado="Pendiente").
 Para "edit": id + campos a cambiar.
 Para "delete": {"id":N}.`;
 
@@ -132,19 +132,19 @@ Para "delete": {"id":N}.`;
           const parsed = JSON.parse(actionMatch[1].trim());
           if (parsed.action === "add") {
             const { id: _id, ...fields } = parsed.data;
-            const newOffer = { estadoSubida:"En proceso", fechaSubida:"Aún no", resultado:"Pendiente", ...fields };
-            const { error } = await supabase.from('ofertas').insert([newOffer]);
+            const newOffer = { estadoSubida:"En proceso", fechaSubida:"Aún no", fechaAdjudicacion:"Aún no", codigoProceso:"", resultado:"Pendiente", ...fields };
+            const { error } = await supabase.from("ofertas").insert([newOffer]);
             if (error) throw error;
             showToast("✅ Oferta agregada");
             await fetchOffers();
           } else if (parsed.action === "edit" && parsed.data?.id) {
             const { id, ...fields } = parsed.data;
-            const { error } = await supabase.from('ofertas').update(fields).eq('id', id);
+            const { error } = await supabase.from("ofertas").update(fields).eq("id", id);
             if (error) throw error;
             showToast("✏️ Oferta actualizada");
             await fetchOffers();
           } else if (parsed.action === "delete" && parsed.data?.id) {
-            const { error } = await supabase.from('ofertas').delete().eq('id', parsed.data.id);
+            const { error } = await supabase.from("ofertas").delete().eq("id", parsed.data.id);
             if (error) throw error;
             showToast("🗑️ Oferta eliminada", "error");
             await fetchOffers();
@@ -161,8 +161,8 @@ Para "delete": {"id":N}.`;
   }
 
   function exportToCSV() {
-    const headers = ["ID","Proyecto","Entidad","Monto (USD)","Estado Subida","Fecha Subida","Fecha Máx. Entrega","Resultado"];
-    const rows = offers.map(o=>[o.id,`"${o.proyecto}"`,`"${o.entidad}"`,o.monto,o.estadoSubida,o.fechaSubida,o.fechaMaxima,o.resultado]);
+    const headers = ["Nro","Entidad","Objeto del Contrato","Código Proceso","Monto (USD)","Fecha Máx. Presentación","Fecha Presentación","Fecha Adjudicación","Estado Subida","Resultado"];
+    const rows = offers.map((o,i) => [i+1, `"${o.entidad||""}"`, `"${o.proyecto||""}"`, o.codigoProceso||"", o.monto||0, o.fechaMaxima||"", o.fechaSubida||"", o.fechaAdjudicacion||"", o.estadoSubida||"", o.resultado||""]);
     const csv = [headers,...rows].map(r=>r.join(",")).join("\n");
     const blob = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
     const a = document.createElement("a");
@@ -186,7 +186,6 @@ Para "delete": {"id":N}.`;
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f2a4a 100%)", fontFamily:"'Segoe UI',system-ui,sans-serif", display:"flex", flexDirection:"column", alignItems:"center", padding:"20px 16px" }}>
 
-      {/* Toast */}
       {toast && (
         <div style={{ position:"fixed", top:20, right:20, zIndex:1000, background:toast.type==="error"?"#ef444422":"#22c55e22", border:`1px solid ${toast.type==="error"?"#ef4444":"#22c55e"}55`, color:toast.type==="error"?"#ef4444":"#22c55e", borderRadius:12, padding:"12px 20px", fontWeight:700, fontSize:14, backdropFilter:"blur(10px)" }}>
           {toast.msg}
@@ -194,7 +193,7 @@ Para "delete": {"id":N}.`;
       )}
 
       {/* Header */}
-      <div style={{ width:"100%", maxWidth:920, marginBottom:20 }}>
+      <div style={{ width:"100%", maxWidth:1100, marginBottom:20 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10, flexWrap:"wrap" }}>
           <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#3b82f6,#1d4ed8)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, boxShadow:"0 0 20px #3b82f644", flexShrink:0 }}>🏛️</div>
           <div>
@@ -216,7 +215,7 @@ Para "delete": {"id":N}.`;
 
       {/* CHAT */}
       {tab==="chat" && (
-        <div style={{ width:"100%", maxWidth:920, display:"flex", flexDirection:"column" }}>
+        <div style={{ width:"100%", maxWidth:1100, display:"flex", flexDirection:"column" }}>
           <div style={{ background:"#1e293b", borderRadius:"16px 16px 0 0", border:"1px solid #334155", borderBottom:"none", height:400, overflowY:"auto", padding:20, display:"flex", flexDirection:"column", gap:12 }}>
             {messages.map((m,i)=>(
               <div key={i} style={{ display:"flex", justifyContent:m.role==="user"?"flex-end":"flex-start" }}>
@@ -236,11 +235,11 @@ Para "delete": {"id":N}.`;
             <div ref={chatEndRef}/>
           </div>
           <div style={{ display:"flex", gap:8, background:"#1e293b", border:"1px solid #334155", borderRadius:"0 0 16px 16px", padding:12 }}>
-            <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMessage()} placeholder="Ej: Agrega oferta de pavimentación, Municipio Quito, $95,000, vence 30 junio..." style={{ flex:1, background:"#0f172a", border:"1px solid #334155", borderRadius:10, padding:"10px 14px", color:"#f1f5f9", fontSize:14, outline:"none", fontFamily:"inherit" }}/>
+            <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMessage()} placeholder="Ej: Agrega oferta LICO-001, Municipio Quito, objeto pavimentación, vence 30 junio..." style={{ flex:1, background:"#0f172a", border:"1px solid #334155", borderRadius:10, padding:"10px 14px", color:"#f1f5f9", fontSize:14, outline:"none", fontFamily:"inherit" }}/>
             <button onClick={sendMessage} disabled={loading||!input.trim()} style={{ background:"linear-gradient(135deg,#3b82f6,#1d4ed8)", border:"none", borderRadius:10, padding:"10px 18px", color:"#fff", fontWeight:700, cursor:loading?"not-allowed":"pointer", opacity:loading?0.6:1, fontSize:18 }}>➤</button>
           </div>
           <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
-            {["Agrega una nueva oferta","¿Cuáles ganamos?","Marca oferta 1 como Ganamos","¿Qué vence pronto?"].map(q=>(
+            {["Agrega una nueva oferta","¿Cuáles ganamos?","¿Qué vence pronto?","Exportar a Excel"].map(q=>(
               <button key={q} onClick={()=>setInput(q)} style={{ background:"#1e293b", border:"1px solid #334155", borderRadius:20, padding:"6px 12px", color:"#94a3b8", fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>{q}</button>
             ))}
           </div>
@@ -249,35 +248,38 @@ Para "delete": {"id":N}.`;
 
       {/* TABLE */}
       {tab==="table" && (
-        <div style={{ width:"100%", maxWidth:920 }}>
+        <div style={{ width:"100%", maxWidth:1100 }}>
           {loadingData ? (
-            <div style={{ textAlign:"center", padding:60, color:"#3b82f6", fontSize:16 }}>Cargando ofertas desde la base de datos...</div>
+            <div style={{ textAlign:"center", padding:60, color:"#3b82f6", fontSize:16 }}>Cargando ofertas...</div>
           ) : (
             <>
               <div style={{ background:"#1e293b", borderRadius:16, border:"1px solid #334155", overflow:"hidden" }}>
                 <div style={{ overflowX:"auto" }}>
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                     <thead>
                       <tr style={{ background:"#0f172a" }}>
-                        {["Proyecto","Entidad","Monto","Estado Subida","Fecha Subida","Fecha Máx. Entrega","Resultado"].map(h=>(
-                          <th key={h} style={{ padding:"12px 14px", color:"#64748b", fontWeight:700, textAlign:"left", whiteSpace:"nowrap", borderBottom:"1px solid #334155" }}>{h}</th>
+                        {["Nro","Entidad","Objeto del Contrato","Código","Monto","Fecha Máx. Presentación","Fecha Presentación","Fecha Adjudicación","Estado Subida","Resultado"].map(h=>(
+                          <th key={h} style={{ padding:"12px 12px", color:"#64748b", fontWeight:700, textAlign:"left", whiteSpace:"nowrap", borderBottom:"1px solid #334155" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {offers.map((o,i)=>(
                         <tr key={o.id} style={{ background:i%2===0?"transparent":"#0f172a33", borderBottom:"1px solid #1e293b" }}>
-                          <td style={{ padding:"11px 14px", color:"#e2e8f0", fontWeight:600, maxWidth:180 }}>
-                            <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={o.proyecto}>{o.proyecto}</div>
-                          </td>
-                          <td style={{ padding:"11px 14px", color:"#94a3b8", maxWidth:150 }}>
+                          <td style={{ padding:"10px 12px", color:"#64748b", fontWeight:700 }}>{i+1}</td>
+                          <td style={{ padding:"10px 12px", color:"#94a3b8", maxWidth:140 }}>
                             <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={o.entidad}>{o.entidad}</div>
                           </td>
-                          <td style={{ padding:"11px 14px", color:"#22c55e", fontWeight:700, whiteSpace:"nowrap" }}>{formatMoney(o.monto)}</td>
-                          <td style={{ padding:"11px 14px" }}><EstadoSubidaBadge value={o.estadoSubida}/></td>
-                          <td style={{ padding:"11px 14px", color:o.fechaSubida==="Aún no"?"#475569":"#94a3b8", fontStyle:o.fechaSubida==="Aún no"?"italic":"normal", whiteSpace:"nowrap" }}>{o.fechaSubida}</td>
-                          <td style={{ padding:"11px 14px" }}><DeadlineBadge offer={o}/></td>
-                          <td style={{ padding:"11px 14px" }}><ResultadoBadge value={o.resultado}/></td>
+                          <td style={{ padding:"10px 12px", color:"#e2e8f0", fontWeight:600, maxWidth:200 }}>
+                            <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={o.proyecto}>{o.proyecto}</div>
+                          </td>
+                          <td style={{ padding:"10px 12px", color:"#64748b", whiteSpace:"nowrap" }}>{o.codigoProceso||"—"}</td>
+                          <td style={{ padding:"10px 12px", color:"#22c55e", fontWeight:700, whiteSpace:"nowrap" }}>{formatMoney(o.monto)}</td>
+                          <td style={{ padding:"10px 12px" }}><DeadlineBadge dateStr={o.fechaMaxima}/></td>
+                          <td style={{ padding:"10px 12px", color:o.fechaSubida==="Aún no"?"#475569":"#94a3b8", fontStyle:o.fechaSubida==="Aún no"?"italic":"normal", whiteSpace:"nowrap" }}>{o.fechaSubida||"Aún no"}</td>
+                          <td style={{ padding:"10px 12px", color:o.fechaAdjudicacion==="Aún no"?"#475569":"#94a3b8", fontStyle:o.fechaAdjudicacion==="Aún no"?"italic":"normal", whiteSpace:"nowrap" }}>{o.fechaAdjudicacion||"Aún no"}</td>
+                          <td style={{ padding:"10px 12px" }}><EstadoSubidaBadge value={o.estadoSubida}/></td>
+                          <td style={{ padding:"10px 12px" }}><ResultadoBadge value={o.resultado}/></td>
                         </tr>
                       ))}
                     </tbody>
@@ -306,16 +308,16 @@ Para "delete": {"id":N}.`;
 
       {/* EXPORT */}
       {tab==="export" && (
-        <div style={{ width:"100%", maxWidth:920 }}>
+        <div style={{ width:"100%", maxWidth:1100 }}>
           <div style={{ background:"#1e293b", borderRadius:16, border:"1px solid #334155", padding:32, textAlign:"center" }}>
             <div style={{ fontSize:48, marginBottom:16 }}>📊</div>
             <div style={{ color:"#f1f5f9", fontWeight:700, fontSize:20, marginBottom:8 }}>Exportar a Excel</div>
             <div style={{ color:"#64748b", fontSize:14, marginBottom:24, lineHeight:1.8 }}>
-              <strong style={{ color:"#3b82f6" }}>{offers.length} ofertas</strong> · Columnas incluidas:<br/>
-              Proyecto · Entidad · Monto · <span style={{ color:"#eab308" }}>Estado Subida</span> · Fecha Subida · <span style={{ color:"#f97316" }}>Fecha Máx. Entrega</span> · <span style={{ color:"#22c55e" }}>Resultado</span>
+              <strong style={{ color:"#3b82f6" }}>{offers.length} ofertas</strong> · Columnas:<br/>
+              Nro · Entidad · Objeto del Contrato · Código · Monto · Fecha Máx. Presentación · Fecha Presentación · Fecha Adjudicación · <span style={{ color:"#eab308" }}>Estado Subida</span> · <span style={{ color:"#22c55e" }}>Resultado</span>
             </div>
             <button onClick={exportToCSV} style={{ background:"linear-gradient(135deg,#22c55e,#16a34a)", border:"none", borderRadius:12, padding:"14px 32px", color:"#fff", fontWeight:700, fontSize:16, cursor:"pointer", boxShadow:"0 4px 16px #22c55e44" }}>⬇️ Descargar CSV para Excel</button>
-            <div style={{ color:"#475569", fontSize:12, marginTop:16 }}>Excel → Datos → Desde texto/CSV para importar con formato correcto</div>
+            <div style={{ color:"#475569", fontSize:12, marginTop:16 }}>Excel → Datos → Desde texto/CSV</div>
           </div>
         </div>
       )}
