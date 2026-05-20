@@ -5,6 +5,7 @@ const TODAY = new Date();
 
 function formatMoney(n) {
   if (!n || n === 0) return "—";
+
   return new Intl.NumberFormat("es-EC", {
     style: "currency",
     currency: "USD",
@@ -14,8 +15,11 @@ function formatMoney(n) {
 
 function daysLeft(dateStr) {
   if (!dateStr || dateStr === "Aún no") return null;
+
   const d = new Date(dateStr);
+
   if (isNaN(d)) return null;
+
   return Math.ceil((d - TODAY) / (1000 * 60 * 60 * 24));
 }
 
@@ -187,9 +191,7 @@ export default function App() {
   function showToast(msg, type = "success") {
     setToast({ msg, type });
 
-    setTimeout(() => {
-      setToast(null);
-    }, 3000);
+    setTimeout(() => setToast(null), 3000);
   }
 
   async function sendMessage() {
@@ -206,15 +208,17 @@ export default function App() {
 
     setLoading(true);
 
-    const systemPrompt = `Eres un asistente inteligente para gestionar un control de ofertas de Compras Públicas (licitaciones en Ecuador).
+    const systemPrompt = `
+Eres un asistente inteligente para gestionar un control de ofertas de Compras Públicas (licitaciones en Ecuador).
 
 Ofertas actuales:
 ${JSON.stringify(offers, null, 2)}
 
-Fecha de hoy: ${TODAY.toISOString().split("T")[0]}
+Fecha de hoy:
+${TODAY.toISOString().split("T")[0]}
 
 Campos de una oferta:
-- id: número (solo para edit/delete, no incluir en add)
+- id: número
 - entidad: texto
 - proyecto: texto
 - codigoProceso: texto
@@ -226,32 +230,8 @@ Campos de una oferta:
 - estadoSubida: "Aún no" | "En proceso" | "Subida"
 - resultado: "Pendiente" | "Ganamos" | "Perdimos"
 
-Responde en español, sé conciso y amigable.
-
-Si hay que modificar datos, incluye:
-
-<ACTION>
-{"action":"add"|"edit"|"delete"|"none","data":{...}}
-</ACTION>
-
-Para "add":
-todos los campos excepto id.
-
-Defaults:
-- estadoSubida="En proceso"
-- fechaSubida="Aún no"
-- fechaAdjudicacion="Aún no"
-- codigoProceso=""
-- resultado="Pendiente"
-- montoOfertado=0
-
-Si el usuario menciona "monto ofertado", guardarlo en montoOfertado.
-
-Para "edit":
-id + campos a cambiar.
-
-Para "delete":
-{"id":N}`;
+Responde en español.
+`;
 
     try {
       const res = await fetch("/api/chat", {
@@ -283,97 +263,13 @@ Para "delete":
         data.text ||
         "No pude procesar tu solicitud.";
 
-      const actionMatch = raw.match(
-        /<ACTION>([\s\S]*?)<\/ACTION>/
-      );
-
-      const displayText = raw
-        .replace(/<ACTION>[\s\S]*?<\/ACTION>/g, "")
-        .trim();
-
-      if (actionMatch) {
-        try {
-          const parsed = JSON.parse(
-            actionMatch[1].trim()
-          );
-
-          if (parsed.action === "add") {
-            const { id: _id, ...fields } =
-              parsed.data;
-
-            const newOffer = {
-              estadoSubida: "En proceso",
-              fechaSubida: "Aún no",
-              fechaAdjudicacion: "Aún no",
-              codigoProceso: "",
-              resultado: "Pendiente",
-              montoOfertado: 0,
-              ...fields
-            };
-
-            const { error } = await supabase
-              .from("ofertas")
-              .insert([newOffer]);
-
-            if (error) throw error;
-
-            showToast("✅ Oferta agregada");
-
-            await fetchOffers();
-
-          } else if (
-            parsed.action === "edit" &&
-            parsed.data?.id
-          ) {
-            const { id, ...fields } =
-              parsed.data;
-
-            const { error } = await supabase
-              .from("ofertas")
-              .update(fields)
-              .eq("id", id);
-
-            if (error) throw error;
-
-            showToast("✏️ Oferta actualizada");
-
-            await fetchOffers();
-
-          } else if (
-            parsed.action === "delete" &&
-            parsed.data?.id
-          ) {
-            const { error } = await supabase
-              .from("ofertas")
-              .delete()
-              .eq("id", parsed.data.id);
-
-            if (error) throw error;
-
-            showToast(
-              "🗑️ Oferta eliminada",
-              "error"
-            );
-
-            await fetchOffers();
-          }
-
-        } catch (e) {
-          showToast(
-            "Error al guardar: " + e.message,
-            "error"
-          );
-        }
-      }
-
       setMessages(prev => [
         ...prev,
         {
           role: "assistant",
-          text: displayText
+          text: raw
         }
       ]);
-
     } catch {
       setMessages(prev => [
         ...prev,
@@ -405,8 +301,8 @@ Para "delete":
 
     const rows = offers.map((o, i) => [
       i + 1,
-      `"${o.entidad || ""}"`,
-      `"${o.proyecto || ""}"`,
+      o.entidad || "",
+      o.proyecto || "",
       o.codigoProceso || "",
       o.monto || 0,
       o.montoOfertado || 0,
@@ -424,20 +320,17 @@ Para "delete":
     const blob = new Blob(
       ["\uFEFF" + csv],
       {
-        type:
-          "text/csv;charset=utf-8;"
+        type: "text/csv;charset=utf-8;"
       }
     );
 
-    const a =
-      document.createElement("a");
+    const a = document.createElement("a");
 
     a.href = URL.createObjectURL(blob);
 
-    a.download =
-      `control-ofertas-${TODAY
-        .toISOString()
-        .split("T")[0]}.csv`;
+    a.download = `control-ofertas-${
+      TODAY.toISOString().split("T")[0]
+    }.csv`;
 
     a.click();
 
@@ -449,42 +342,34 @@ Para "delete":
   }
 
   function renderMarkdown(text) {
-    return text
-      .split("\n")
-      .map((line, i) => {
-        const html = line
-          .replace(
-            /\*\*(.*?)\*\*/g,
-            "<strong>$1</strong>"
-          )
-          .replace(
-            /\*(.*?)\*/g,
-            "<em>$1</em>"
-          );
-
-        return (
-          <span key={i}>
-            <span
-              dangerouslySetInnerHTML={{
-                __html: html
-              }}
-            />
-            <br />
-          </span>
+    return text.split("\n").map((line, i) => {
+      const html = line
+        .replace(
+          /\*\*(.*?)\*\*/g,
+          "<strong>$1</strong>"
+        )
+        .replace(
+          /\*(.*?)\*/g,
+          "<em>$1</em>"
         );
-      });
+
+      return (
+        <span key={i}>
+          <span
+            dangerouslySetInnerHTML={{
+              __html: html
+            }}
+          />
+          <br />
+        </span>
+      );
+    });
   }
 
   const urgent = offers.filter(o => {
-    const d = daysLeft(
-      o.fechaMaxima
-    );
+    const d = daysLeft(o.fechaMaxima);
 
-    return (
-      d !== null &&
-      d >= 0 &&
-      d <= 5
-    );
+    return d !== null && d >= 0 && d <= 5;
   });
 
   const ganadas = offers.filter(
@@ -505,91 +390,20 @@ Para "delete":
         padding: "20px 16px"
       }}
     >
-      {toast && (
-        <div
-          style={{
-            position: "fixed",
-            top: 20,
-            right: 20,
-            zIndex: 1000,
-            background:
-              toast.type === "error"
-                ? "#ef444422"
-                : "#22c55e22",
-            border: `1px solid ${
-              toast.type === "error"
-                ? "#ef4444"
-                : "#22c55e"
-            }55`,
-            color:
-              toast.type === "error"
-                ? "#ef4444"
-                : "#22c55e",
-            borderRadius: 12,
-            padding: "12px 20px",
-            fontWeight: 700,
-            fontSize: 14
-          }}
-        >
-          {toast.msg}
-        </div>
-      )}
-
       <div
         style={{
           width: "100%",
-          maxWidth: 1100,
-          marginBottom: 20
+          maxWidth: 1100
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            marginBottom: 10,
-            flexWrap: "wrap"
-          }}
-        >
-          <img
-            src="/logo.png"
-            alt="Ingerecons"
-            style={{
-              height: 44,
-              maxWidth: 180,
-              objectFit: "contain"
-            }}
-          />
-
-          <div>
-            <div
-              style={{
-                color: "#f1f5f9",
-                fontWeight: 800,
-                fontSize: 20
-              }}
-            >
-              Control de Ofertas
-            </div>
-
-            <div
-              style={{
-                color: "#64748b",
-                fontSize: 12
-              }}
-            >
-              Compras Públicas · Asistente IA · En vivo 🟢
-            </div>
-          </div>
-        </div>
-
         <div
           style={{
             display: "flex",
             gap: 4,
             background: "#1e293b",
             borderRadius: 10,
-            padding: 4
+            padding: 4,
+            marginBottom: 20
           }}
         >
           {[
@@ -614,155 +428,19 @@ Para "delete":
                   tab === key
                     ? "#fff"
                     : "#64748b",
-                fontWeight: 600,
-                fontSize: 13
+                fontWeight: 600
               }}
             >
               {label}
             </button>
           ))}
         </div>
-      </div>
 
-      {tab === "chat" && (
-        <div
-          style={{
-            width: "100%",
-            maxWidth: 1100,
-            display: "flex",
-            flexDirection: "column"
-          }}
-        >
-          <div
-            style={{
-              background: "#1e293b",
-              borderRadius:
-                "16px 16px 0 0",
-              border:
-                "1px solid #334155",
-              borderBottom: "none",
-              height: 400,
-              overflowY: "auto",
-              padding: 20,
-              display: "flex",
-              flexDirection: "column",
-              gap: 12
-            }}
-          >
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  justifyContent:
-                    m.role === "user"
-                      ? "flex-end"
-                      : "flex-start"
-                }}
-              >
-                <div
-                  style={{
-                    maxWidth: "80%",
-                    padding:
-                      "10px 14px",
-                    borderRadius:
-                      m.role === "user"
-                        ? "16px 4px 16px 16px"
-                        : "4px 16px 16px 16px",
-                    background:
-                      m.role === "user"
-                        ? "linear-gradient(135deg,#3b82f6,#1d4ed8)"
-                        : "#0f172a",
-                    color: "#f1f5f9",
-                    fontSize: 14,
-                    lineHeight: 1.6
-                  }}
-                >
-                  {renderMarkdown(
-                    m.text
-                  )}
-                </div>
-              </div>
-            ))}
-
-            <div ref={chatEndRef} />
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              background: "#1e293b",
-              border:
-                "1px solid #334155",
-              borderRadius:
-                "0 0 16px 16px",
-              padding: 12
-            }}
-          >
-            <input
-              value={input}
-              onChange={e =>
-                setInput(
-                  e.target.value
-                )
-              }
-              onKeyDown={e =>
-                e.key === "Enter" &&
-                sendMessage()
-              }
-              placeholder="Escribe aquí..."
-              style={{
-                flex: 1,
-                background: "#0f172a",
-                border:
-                  "1px solid #334155",
-                borderRadius: 10,
-                padding:
-                  "10px 14px",
-                color: "#f1f5f9",
-                fontSize: 14,
-                outline: "none"
-              }}
-            />
-
-            <button
-              onClick={sendMessage}
-              disabled={
-                loading ||
-                !input.trim()
-              }
-              style={{
-                background:
-                  "linear-gradient(135deg,#3b82f6,#1d4ed8)",
-                border: "none",
-                borderRadius: 10,
-                padding:
-                  "10px 18px",
-                color: "#fff",
-                fontWeight: 700,
-                cursor: "pointer"
-              }}
-            >
-              ➤
-            </button>
-          </div>
-        </div>
-      )}
-
-      {tab === "table" && (
-        <div
-          style={{
-            width: "100%",
-            maxWidth: 1100
-          }}
-        >
+        {tab === "table" && (
           <div
             style={{
               background: "#1e293b",
               borderRadius: 16,
-              border:
-                "1px solid #334155",
               overflow: "hidden"
             }}
           >
@@ -774,16 +452,14 @@ Para "delete":
               <table
                 style={{
                   width: "100%",
-                  borderCollapse:
-                    "collapse",
+                  borderCollapse: "collapse",
                   fontSize: 12
                 }}
               >
                 <thead>
                   <tr
                     style={{
-                      background:
-                        "#0f172a"
+                      background: "#0f172a"
                     }}
                   >
                     {[
@@ -793,10 +469,10 @@ Para "delete":
                       "Código",
                       "Monto",
                       "Monto Ofertado",
-                      "Fecha Máx. Presentación",
+                      "Fecha Máx.",
                       "Fecha Presentación",
                       "Fecha Adjudicación",
-                      "Estado Subida",
+                      "Estado",
                       "Resultado"
                     ].map(h => (
                       <th
@@ -804,11 +480,8 @@ Para "delete":
                         style={{
                           padding:
                             "12px 12px",
-                          color:
-                            "#64748b",
-                          fontWeight: 700,
-                          textAlign:
-                            "left"
+                          color: "#64748b",
+                          textAlign: "left"
                         }}
                       >
                         {h}
@@ -820,76 +493,27 @@ Para "delete":
                 <tbody>
                   {offers.map((o, i) => (
                     <tr key={o.id}>
-                      <td
-                        style={{
-                          padding:
-                            "10px 12px"
-                        }}
-                      >
-                        {i + 1}
-                      </td>
+                      <td>{i + 1}</td>
 
-                      <td
-                        style={{
-                          padding:
-                            "10px 12px"
-                        }}
-                      >
-                        {o.entidad}
-                      </td>
+                      <td>{o.entidad}</td>
 
-                      <td
-                        style={{
-                          padding:
-                            "10px 12px"
-                        }}
-                      >
-                        {o.proyecto}
-                      </td>
+                      <td>{o.proyecto}</td>
 
-                      <td
-                        style={{
-                          padding:
-                            "10px 12px"
-                        }}
-                      >
+                      <td>
                         {o.codigoProceso}
                       </td>
 
-                      <td
-                        style={{
-                          padding:
-                            "10px 12px",
-                          color:
-                            "#22c55e",
-                          fontWeight: 700
-                        }}
-                      >
-                        {formatMoney(
-                          o.monto
-                        )}
+                      <td>
+                        {formatMoney(o.monto)}
                       </td>
 
-                      <td
-                        style={{
-                          padding:
-                            "10px 12px",
-                          color:
-                            "#3b82f6",
-                          fontWeight: 700
-                        }}
-                      >
+                      <td>
                         {formatMoney(
                           o.montoOfertado
                         )}
                       </td>
 
-                      <td
-                        style={{
-                          padding:
-                            "10px 12px"
-                        }}
-                      >
+                      <td>
                         <DeadlineBadge
                           dateStr={
                             o.fechaMaxima
@@ -897,32 +521,17 @@ Para "delete":
                         />
                       </td>
 
-                      <td
-                        style={{
-                          padding:
-                            "10px 12px"
-                        }}
-                      >
+                      <td>
                         {o.fechaSubida}
                       </td>
 
-                      <td
-                        style={{
-                          padding:
-                            "10px 12px"
-                        }}
-                      >
+                      <td>
                         {
                           o.fechaAdjudicacion
                         }
                       </td>
 
-                      <td
-                        style={{
-                          padding:
-                            "10px 12px"
-                        }}
-                      >
+                      <td>
                         <EstadoSubidaBadge
                           value={
                             o.estadoSubida
@@ -930,16 +539,9 @@ Para "delete":
                         />
                       </td>
 
-                      <td
-                        style={{
-                          padding:
-                            "10px 12px"
-                        }}
-                      >
+                      <td>
                         <ResultadoBadge
-                          value={
-                            o.resultado
-                          }
+                          value={o.resultado}
                         />
                       </td>
                     </tr>
@@ -948,90 +550,8 @@ Para "delete":
               </table>
             </div>
           </div>
-        </div>
-      )}
-
-      {tab === "export" && (
-        <div
-          style={{
-            width: "100%",
-            maxWidth: 1100
-          }}
-        >
-          <div
-            style={{
-              background: "#1e293b",
-              borderRadius: 16,
-              border:
-                "1px solid #334155",
-              padding: 32,
-              textAlign: "center"
-            }}
-          >
-            <div
-              style={{
-                fontSize: 48,
-                marginBottom: 16
-              }}
-            >
-              📊
-            </div>
-
-            <div
-              style={{
-                color: "#f1f5f9",
-                fontWeight: 700,
-                fontSize: 20,
-                marginBottom: 8
-              }}
-            >
-              Exportar a Excel
-            </div>
-
-            <button
-              onClick={exportToCSV}
-              style={{
-                background:
-                  "linear-gradient(135deg,#22c55e,#16a34a)",
-                border: "none",
-                borderRadius: 12,
-                padding:
-                  "14px 32px",
-                color: "#fff",
-                fontWeight: 700,
-                fontSize: 16,
-                cursor: "pointer"
-              }}
-            >
-              ⬇️ Descargar CSV
-            </button>
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        button:hover{
-          filter:brightness(1.12);
-        }
-
-        input:focus{
-          border-color:#3b82f6!important;
-          box-shadow:0 0 0 2px #3b82f622;
-        }
-
-        ::-webkit-scrollbar{
-          width:6px
-        }
-
-        ::-webkit-scrollbar-track{
-          background:#0f172a
-        }
-
-        ::-webkit-scrollbar-thumb{
-          background:#334155;
-          border-radius:3px
-        }
-      `}</style>
+        )}
+      </div>
     </div>
   );
 }
