@@ -92,7 +92,8 @@ Campos de una oferta:
 - entidad: texto (entidad que contrata)
 - proyecto: texto (objeto del contrato)
 - codigoProceso: texto (código del proceso licitatorio)
-- monto: número USD
+- monto: número USD (monto referencial de la entidad)
+- montoOfertado: número USD (monto que oferta Ingerecons, puede ser diferente al referencial)
 - fechaMaxima: fecha YYYY-MM-DD (fecha máxima de presentación)
 - fechaSubida: fecha YYYY-MM-DD o "Aún no" (fecha de presentación)
 - fechaAdjudicacion: fecha YYYY-MM-DD o "Aún no" (fecha estimada de adjudicación)
@@ -106,7 +107,7 @@ Si hay que modificar datos, incluye al final:
 {"action":"add"|"edit"|"delete"|"none","data":{...}}
 </ACTION>
 
-Para "add": todos los campos excepto id (defaults: estadoSubida="En proceso", fechaSubida="Aún no", fechaAdjudicacion="Aún no", codigoProceso="", resultado="Pendiente").
+Para "add": todos los campos excepto id (defaults: estadoSubida="En proceso", fechaSubida="Aún no", fechaAdjudicacion="Aún no", codigoProceso="", monto=0, montoOfertado=0, resultado="Pendiente").
 Para "edit": id + campos a cambiar.
 Para "delete": {"id":N}.`;
 
@@ -132,7 +133,7 @@ Para "delete": {"id":N}.`;
           const parsed = JSON.parse(actionMatch[1].trim());
           if (parsed.action === "add") {
             const { id: _id, ...fields } = parsed.data;
-            const newOffer = { estadoSubida:"En proceso", fechaSubida:"Aún no", fechaAdjudicacion:"Aún no", codigoProceso:"", resultado:"Pendiente", ...fields };
+            const newOffer = { estadoSubida:"En proceso", fechaSubida:"Aún no", fechaAdjudicacion:"Aún no", codigoProceso:"", monto:0, montoOfertado:0, resultado:"Pendiente", ...fields };
             const { error } = await supabase.from("ofertas").insert([newOffer]);
             if (error) throw error;
             showToast("✅ Oferta agregada");
@@ -161,8 +162,8 @@ Para "delete": {"id":N}.`;
   }
 
   function exportToCSV() {
-    const headers = ["Nro","Entidad","Objeto del Contrato","Código Proceso","Monto (USD)","Fecha Máx. Presentación","Fecha Presentación","Fecha Adjudicación","Estado Subida","Resultado"];
-    const rows = offers.map((o,i) => [i+1, `"${o.entidad||""}"`, `"${o.proyecto||""}"`, o.codigoProceso||"", o.monto||0, o.fechaMaxima||"", o.fechaSubida||"", o.fechaAdjudicacion||"", o.estadoSubida||"", o.resultado||""]);
+    const headers = ["Nro","Entidad","Objeto del Contrato","Código Proceso","Monto Ref. (USD)","Monto Ofertado (USD)","Fecha Máx. Presentación","Fecha Presentación","Fecha Adjudicación","Estado Subida","Resultado"];
+    const rows = offers.map((o,i) => [i+1, `"${o.entidad||""}"`, `"${o.proyecto||""}"`, o.codigoProceso||"", o.monto||0, o.montoOfertado||0, o.fechaMaxima||"", o.fechaSubida||"", o.fechaAdjudicacion||"", o.estadoSubida||"", o.resultado||""]);
     const csv = [headers,...rows].map(r=>r.join(",")).join("\n");
     const blob = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
     const a = document.createElement("a");
@@ -193,7 +194,7 @@ Para "delete": {"id":N}.`;
       )}
 
       {/* Header */}
-      <div style={{ width:"100%", maxWidth:1100, marginBottom:20 }}>
+      <div style={{ width:"100%", maxWidth:1200, marginBottom:20 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10, flexWrap:"wrap" }}>
           <img src="/logo.png" alt="Ingerecons" style={{ height:44, maxWidth:180, objectFit:"contain", flexShrink:0 }} />
           <div>
@@ -215,7 +216,7 @@ Para "delete": {"id":N}.`;
 
       {/* CHAT */}
       {tab==="chat" && (
-        <div style={{ width:"100%", maxWidth:1100, display:"flex", flexDirection:"column" }}>
+        <div style={{ width:"100%", maxWidth:1200, display:"flex", flexDirection:"column" }}>
           <div style={{ background:"#1e293b", borderRadius:"16px 16px 0 0", border:"1px solid #334155", borderBottom:"none", height:400, overflowY:"auto", padding:20, display:"flex", flexDirection:"column", gap:12 }}>
             {messages.map((m,i)=>(
               <div key={i} style={{ display:"flex", justifyContent:m.role==="user"?"flex-end":"flex-start" }}>
@@ -248,7 +249,7 @@ Para "delete": {"id":N}.`;
 
       {/* TABLE */}
       {tab==="table" && (
-        <div style={{ width:"100%", maxWidth:1100 }}>
+        <div style={{ width:"100%", maxWidth:1200 }}>
           {loadingData ? (
             <div style={{ textAlign:"center", padding:60, color:"#3b82f6", fontSize:16 }}>Cargando ofertas...</div>
           ) : (
@@ -258,7 +259,7 @@ Para "delete": {"id":N}.`;
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                     <thead>
                       <tr style={{ background:"#0f172a" }}>
-                        {["Nro","Entidad","Objeto del Contrato","Código","Monto","Fecha Máx. Presentación","Fecha Presentación","Fecha Adjudicación","Estado Subida","Resultado"].map(h=>(
+                        {["Nro","Entidad","Objeto del Contrato","Código","Monto Ref.","Monto Ofertado","Fecha Máx. Presentación","Fecha Presentación","Fecha Adjudicación","Estado Subida","Resultado"].map(h=>(
                           <th key={h} style={{ padding:"12px 12px", color:"#64748b", fontWeight:700, textAlign:"left", whiteSpace:"nowrap", borderBottom:"1px solid #334155" }}>{h}</th>
                         ))}
                       </tr>
@@ -275,6 +276,7 @@ Para "delete": {"id":N}.`;
                           </td>
                           <td style={{ padding:"10px 12px", color:"#64748b", whiteSpace:"nowrap" }}>{o.codigoProceso||"—"}</td>
                           <td style={{ padding:"10px 12px", color:"#22c55e", fontWeight:700, whiteSpace:"nowrap" }}>{formatMoney(o.monto)}</td>
+                          <td style={{ padding:"10px 12px", color:"#3b82f6", fontWeight:700, whiteSpace:"nowrap" }}>{formatMoney(o.montoOfertado)}</td>
                           <td style={{ padding:"10px 12px" }}><DeadlineBadge dateStr={o.fechaMaxima}/></td>
                           <td style={{ padding:"10px 12px", color:o.fechaSubida==="Aún no"?"#475569":"#94a3b8", fontStyle:o.fechaSubida==="Aún no"?"italic":"normal", whiteSpace:"nowrap" }}>{o.fechaSubida||"Aún no"}</td>
                           <td style={{ padding:"10px 12px", color:o.fechaAdjudicacion==="Aún no"?"#475569":"#94a3b8", fontStyle:o.fechaAdjudicacion==="Aún no"?"italic":"normal", whiteSpace:"nowrap" }}>{o.fechaAdjudicacion||"Aún no"}</td>
@@ -290,7 +292,8 @@ Para "delete": {"id":N}.`;
               <div style={{ display:"flex", gap:10, marginTop:12, flexWrap:"wrap" }}>
                 {[
                   ["Total",offers.length,"#3b82f6"],
-                  ["Monto total",formatMoney(offers.reduce((s,o)=>s+(Number(o.monto)||0),0)),"#22c55e"],
+                  ["Monto ref. total",formatMoney(offers.reduce((s,o)=>s+(Number(o.monto)||0),0)),"#22c55e"],
+                  ["Monto ofertado total",formatMoney(offers.reduce((s,o)=>s+(Number(o.montoOfertado)||0),0)),"#3b82f6"],
                   ["🏆 Ganamos",offers.filter(o=>o.resultado==="Ganamos").length,"#22c55e"],
                   ["❌ Perdimos",offers.filter(o=>o.resultado==="Perdimos").length,"#ef4444"],
                   ["⏸ Pendientes",offers.filter(o=>o.resultado==="Pendiente").length,"#94a3b8"],
@@ -308,13 +311,13 @@ Para "delete": {"id":N}.`;
 
       {/* EXPORT */}
       {tab==="export" && (
-        <div style={{ width:"100%", maxWidth:1100 }}>
+        <div style={{ width:"100%", maxWidth:1200 }}>
           <div style={{ background:"#1e293b", borderRadius:16, border:"1px solid #334155", padding:32, textAlign:"center" }}>
             <div style={{ fontSize:48, marginBottom:16 }}>📊</div>
             <div style={{ color:"#f1f5f9", fontWeight:700, fontSize:20, marginBottom:8 }}>Exportar a Excel</div>
             <div style={{ color:"#64748b", fontSize:14, marginBottom:24, lineHeight:1.8 }}>
-              <strong style={{ color:"#3b82f6" }}>{offers.length} ofertas</strong> · Columnas:<br/>
-              Nro · Entidad · Objeto del Contrato · Código · Monto · Fecha Máx. Presentación · Fecha Presentación · Fecha Adjudicación · <span style={{ color:"#eab308" }}>Estado Subida</span> · <span style={{ color:"#22c55e" }}>Resultado</span>
+              <strong style={{ color:"#3b82f6" }}>{offers.length} ofertas</strong> · Columnas incluidas:<br/>
+              Nro · Entidad · Objeto del Contrato · Código · <span style={{ color:"#22c55e" }}>Monto Ref.</span> · <span style={{ color:"#3b82f6" }}>Monto Ofertado</span> · Fechas · <span style={{ color:"#eab308" }}>Estado Subida</span> · <span style={{ color:"#22c55e" }}>Resultado</span>
             </div>
             <button onClick={exportToCSV} style={{ background:"linear-gradient(135deg,#22c55e,#16a34a)", border:"none", borderRadius:12, padding:"14px 32px", color:"#fff", fontWeight:700, fontSize:16, cursor:"pointer", boxShadow:"0 4px 16px #22c55e44" }}>⬇️ Descargar CSV para Excel</button>
             <div style={{ color:"#475569", fontSize:12, marginTop:16 }}>Excel → Datos → Desde texto/CSV</div>
