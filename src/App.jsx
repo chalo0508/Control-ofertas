@@ -21,6 +21,7 @@ function daysLeft(dateStr) {
 
 function DeadlineBadge({ dateStr }) {
   const days = daysLeft(dateStr);
+
   let label, color;
 
   if (days === null) {
@@ -146,7 +147,9 @@ export default function App() {
   const chatEndRef = useRef(null);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    chatEndRef.current?.scrollIntoView({
+      behavior: "smooth"
+    });
   }, [messages]);
 
   useEffect(() => {
@@ -203,8 +206,7 @@ export default function App() {
 
     setLoading(true);
 
-    const systemPrompt = `
-Eres un asistente inteligente para gestionar un control de ofertas de Compras Públicas (licitaciones en Ecuador).
+    const systemPrompt = `Eres un asistente inteligente para gestionar un control de ofertas de Compras Públicas (licitaciones en Ecuador).
 
 Ofertas actuales:
 ${JSON.stringify(offers, null, 2)}
@@ -213,12 +215,12 @@ Fecha de hoy: ${TODAY.toISOString().split("T")[0]}
 
 Campos de una oferta:
 - id: número (solo para edit/delete, no incluir en add)
-- entidad: texto (entidad que contrata)
-- proyecto: texto (objeto del contrato)
-- codigoProceso: texto (código del proceso licitatorio)
+- entidad: texto
+- proyecto: texto
+- codigoProceso: texto
 - monto: número USD
 - montoOfertado: número USD
-- fechaMaxima: fecha YYYY-MM-DD (fecha máxima de presentación)
+- fechaMaxima: fecha YYYY-MM-DD
 - fechaSubida: fecha YYYY-MM-DD o "Aún no"
 - fechaAdjudicacion: fecha YYYY-MM-DD o "Aún no"
 - estadoSubida: "Aún no" | "En proceso" | "Subida"
@@ -226,7 +228,7 @@ Campos de una oferta:
 
 Responde en español, sé conciso y amigable.
 
-Si hay que modificar datos, incluye al final:
+Si hay que modificar datos, incluye:
 
 <ACTION>
 {"action":"add"|"edit"|"delete"|"none","data":{...}}
@@ -236,12 +238,12 @@ Para "add":
 todos los campos excepto id.
 
 Defaults:
-- estadoSubida = "En proceso"
-- fechaSubida = "Aún no"
-- fechaAdjudicacion = "Aún no"
-- codigoProceso = ""
-- resultado = "Pendiente"
-- montoOfertado = 0
+- estadoSubida="En proceso"
+- fechaSubida="Aún no"
+- fechaAdjudicacion="Aún no"
+- codigoProceso=""
+- resultado="Pendiente"
+- montoOfertado=0
 
 Si el usuario menciona "monto ofertado", guardarlo en montoOfertado.
 
@@ -249,8 +251,7 @@ Para "edit":
 id + campos a cambiar.
 
 Para "delete":
-{"id":N}
-`;
+{"id":N}`;
 
     try {
       const res = await fetch("/api/chat", {
@@ -262,7 +263,10 @@ Para "delete":
           system: systemPrompt,
           messages: [
             ...messages.map(m => ({
-              role: m.role === "assistant" ? "assistant" : "user",
+              role:
+                m.role === "assistant"
+                  ? "assistant"
+                  : "user",
               content: m.text
             })),
             {
@@ -276,7 +280,8 @@ Para "delete":
       const data = await res.json();
 
       const raw =
-        data.text || "No pude procesar tu solicitud.";
+        data.text ||
+        "No pude procesar tu solicitud.";
 
       const actionMatch = raw.match(
         /<ACTION>([\s\S]*?)<\/ACTION>/
@@ -293,7 +298,8 @@ Para "delete":
           );
 
           if (parsed.action === "add") {
-            const { id: _id, ...fields } = parsed.data;
+            const { id: _id, ...fields } =
+              parsed.data;
 
             const newOffer = {
               estadoSubida: "En proceso",
@@ -319,7 +325,8 @@ Para "delete":
             parsed.action === "edit" &&
             parsed.data?.id
           ) {
-            const { id, ...fields } = parsed.data;
+            const { id, ...fields } =
+              parsed.data;
 
             const { error } = await supabase
               .from("ofertas")
@@ -387,7 +394,7 @@ Para "delete":
       "Entidad",
       "Objeto del Contrato",
       "Código Proceso",
-      "Monto Referencial (USD)",
+      "Monto (USD)",
       "Monto Ofertado (USD)",
       "Fecha Máx. Presentación",
       "Fecha Presentación",
@@ -417,11 +424,13 @@ Para "delete":
     const blob = new Blob(
       ["\uFEFF" + csv],
       {
-        type: "text/csv;charset=utf-8;"
+        type:
+          "text/csv;charset=utf-8;"
       }
     );
 
-    const a = document.createElement("a");
+    const a =
+      document.createElement("a");
 
     a.href = URL.createObjectURL(blob);
 
@@ -432,33 +441,50 @@ Para "delete":
 
     a.click();
 
-    showToast("✅ CSV exportado correctamente");
+    showToast(
+      "✅ CSV exportado correctamente"
+    );
 
     setTab("chat");
   }
 
   function renderMarkdown(text) {
-    return text.split("\n").map((line, i) => {
-      const html = line
-        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-        .replace(/\*(.*?)\*/g, "<em>$1</em>");
+    return text
+      .split("\n")
+      .map((line, i) => {
+        const html = line
+          .replace(
+            /\*\*(.*?)\*\*/g,
+            "<strong>$1</strong>"
+          )
+          .replace(
+            /\*(.*?)\*/g,
+            "<em>$1</em>"
+          );
 
-      return (
-        <span key={i}>
-          <span
-            dangerouslySetInnerHTML={{
-              __html: html
-            }}
-          />
-          <br />
-        </span>
-      );
-    });
+        return (
+          <span key={i}>
+            <span
+              dangerouslySetInnerHTML={{
+                __html: html
+              }}
+            />
+            <br />
+          </span>
+        );
+      });
   }
 
   const urgent = offers.filter(o => {
-    const d = daysLeft(o.fechaMaxima);
-    return d !== null && d >= 0 && d <= 5;
+    const d = daysLeft(
+      o.fechaMaxima
+    );
+
+    return (
+      d !== null &&
+      d >= 0 &&
+      d <= 5
+    );
   });
 
   const ganadas = offers.filter(
@@ -471,14 +497,14 @@ Para "delete":
         minHeight: "100vh",
         background:
           "linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f2a4a 100%)",
-        fontFamily: "'Segoe UI',system-ui,sans-serif",
+        fontFamily:
+          "'Segoe UI',system-ui,sans-serif",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         padding: "20px 16px"
       }}
     >
-
       {toast && (
         <div
           style={{
@@ -502,8 +528,7 @@ Para "delete":
             borderRadius: 12,
             padding: "12px 20px",
             fontWeight: 700,
-            fontSize: 14,
-            backdropFilter: "blur(10px)"
+            fontSize: 14
           }}
         >
           {toast.msg}
@@ -532,8 +557,7 @@ Para "delete":
             style={{
               height: 44,
               maxWidth: 180,
-              objectFit: "contain",
-              flexShrink: 0
+              objectFit: "contain"
             }}
           />
 
@@ -542,8 +566,7 @@ Para "delete":
               style={{
                 color: "#f1f5f9",
                 fontWeight: 800,
-                fontSize: 20,
-                letterSpacing: -0.5
+                fontSize: 20
               }}
             >
               Control de Ofertas
@@ -601,6 +624,132 @@ Para "delete":
         </div>
       </div>
 
+      {tab === "chat" && (
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 1100,
+            display: "flex",
+            flexDirection: "column"
+          }}
+        >
+          <div
+            style={{
+              background: "#1e293b",
+              borderRadius:
+                "16px 16px 0 0",
+              border:
+                "1px solid #334155",
+              borderBottom: "none",
+              height: 400,
+              overflowY: "auto",
+              padding: 20,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12
+            }}
+          >
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    m.role === "user"
+                      ? "flex-end"
+                      : "flex-start"
+                }}
+              >
+                <div
+                  style={{
+                    maxWidth: "80%",
+                    padding:
+                      "10px 14px",
+                    borderRadius:
+                      m.role === "user"
+                        ? "16px 4px 16px 16px"
+                        : "4px 16px 16px 16px",
+                    background:
+                      m.role === "user"
+                        ? "linear-gradient(135deg,#3b82f6,#1d4ed8)"
+                        : "#0f172a",
+                    color: "#f1f5f9",
+                    fontSize: 14,
+                    lineHeight: 1.6
+                  }}
+                >
+                  {renderMarkdown(
+                    m.text
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <div ref={chatEndRef} />
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              background: "#1e293b",
+              border:
+                "1px solid #334155",
+              borderRadius:
+                "0 0 16px 16px",
+              padding: 12
+            }}
+          >
+            <input
+              value={input}
+              onChange={e =>
+                setInput(
+                  e.target.value
+                )
+              }
+              onKeyDown={e =>
+                e.key === "Enter" &&
+                sendMessage()
+              }
+              placeholder="Escribe aquí..."
+              style={{
+                flex: 1,
+                background: "#0f172a",
+                border:
+                  "1px solid #334155",
+                borderRadius: 10,
+                padding:
+                  "10px 14px",
+                color: "#f1f5f9",
+                fontSize: 14,
+                outline: "none"
+              }}
+            />
+
+            <button
+              onClick={sendMessage}
+              disabled={
+                loading ||
+                !input.trim()
+              }
+              style={{
+                background:
+                  "linear-gradient(135deg,#3b82f6,#1d4ed8)",
+                border: "none",
+                borderRadius: 10,
+                padding:
+                  "10px 18px",
+                color: "#fff",
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              ➤
+            </button>
+          </div>
+        </div>
+      )}
+
       {tab === "table" && (
         <div
           style={{
@@ -612,20 +761,31 @@ Para "delete":
             style={{
               background: "#1e293b",
               borderRadius: 16,
-              border: "1px solid #334155",
+              border:
+                "1px solid #334155",
               overflow: "hidden"
             }}
           >
-            <div style={{ overflowX: "auto" }}>
+            <div
+              style={{
+                overflowX: "auto"
+              }}
+            >
               <table
                 style={{
                   width: "100%",
-                  borderCollapse: "collapse",
+                  borderCollapse:
+                    "collapse",
                   fontSize: 12
                 }}
               >
                 <thead>
-                  <tr style={{ background: "#0f172a" }}>
+                  <tr
+                    style={{
+                      background:
+                        "#0f172a"
+                    }}
+                  >
                     {[
                       "Nro",
                       "Entidad",
@@ -642,13 +802,13 @@ Para "delete":
                       <th
                         key={h}
                         style={{
-                          padding: "12px 12px",
-                          color: "#64748b",
+                          padding:
+                            "12px 12px",
+                          color:
+                            "#64748b",
                           fontWeight: 700,
-                          textAlign: "left",
-                          whiteSpace: "nowrap",
-                          borderBottom:
-                            "1px solid #334155"
+                          textAlign:
+                            "left"
                         }}
                       >
                         {h}
@@ -659,22 +819,11 @@ Para "delete":
 
                 <tbody>
                   {offers.map((o, i) => (
-                    <tr
-                      key={o.id}
-                      style={{
-                        background:
-                          i % 2 === 0
-                            ? "transparent"
-                            : "#0f172a33",
-                        borderBottom:
-                          "1px solid #1e293b"
-                      }}
-                    >
+                    <tr key={o.id}>
                       <td
                         style={{
-                          padding: "10px 12px",
-                          color: "#64748b",
-                          fontWeight: 700
+                          padding:
+                            "10px 12px"
                         }}
                       >
                         {i + 1}
@@ -682,8 +831,8 @@ Para "delete":
 
                       <td
                         style={{
-                          padding: "10px 12px",
-                          color: "#94a3b8"
+                          padding:
+                            "10px 12px"
                         }}
                       >
                         {o.entidad}
@@ -691,9 +840,8 @@ Para "delete":
 
                       <td
                         style={{
-                          padding: "10px 12px",
-                          color: "#e2e8f0",
-                          fontWeight: 600
+                          padding:
+                            "10px 12px"
                         }}
                       >
                         {o.proyecto}
@@ -701,74 +849,97 @@ Para "delete":
 
                       <td
                         style={{
-                          padding: "10px 12px",
-                          color: "#64748b"
+                          padding:
+                            "10px 12px"
                         }}
                       >
-                        {o.codigoProceso || "—"}
+                        {o.codigoProceso}
                       </td>
 
                       <td
                         style={{
-                          padding: "10px 12px",
-                          color: "#22c55e",
-                          fontWeight: 700,
-                          whiteSpace: "nowrap"
+                          padding:
+                            "10px 12px",
+                          color:
+                            "#22c55e",
+                          fontWeight: 700
                         }}
                       >
-                        {formatMoney(o.monto)}
+                        {formatMoney(
+                          o.monto
+                        )}
                       </td>
 
                       <td
                         style={{
-                          padding: "10px 12px",
-                          color: "#3b82f6",
-                          fontWeight: 700,
-                          whiteSpace: "nowrap"
+                          padding:
+                            "10px 12px",
+                          color:
+                            "#3b82f6",
+                          fontWeight: 700
                         }}
                       >
-                        {formatMoney(o.montoOfertado)}
+                        {formatMoney(
+                          o.montoOfertado
+                        )}
                       </td>
 
-                      <td style={{ padding: "10px 12px" }}>
+                      <td
+                        style={{
+                          padding:
+                            "10px 12px"
+                        }}
+                      >
                         <DeadlineBadge
-                          dateStr={o.fechaMaxima}
+                          dateStr={
+                            o.fechaMaxima
+                          }
                         />
                       </td>
 
                       <td
                         style={{
-                          padding: "10px 12px",
-                          color:
-                            o.fechaSubida === "Aún no"
-                              ? "#475569"
-                              : "#94a3b8"
+                          padding:
+                            "10px 12px"
                         }}
                       >
-                        {o.fechaSubida || "Aún no"}
+                        {o.fechaSubida}
                       </td>
 
                       <td
                         style={{
-                          padding: "10px 12px",
-                          color:
-                            o.fechaAdjudicacion === "Aún no"
-                              ? "#475569"
-                              : "#94a3b8"
+                          padding:
+                            "10px 12px"
                         }}
                       >
-                        {o.fechaAdjudicacion || "Aún no"}
+                        {
+                          o.fechaAdjudicacion
+                        }
                       </td>
 
-                      <td style={{ padding: "10px 12px" }}>
+                      <td
+                        style={{
+                          padding:
+                            "10px 12px"
+                        }}
+                      >
                         <EstadoSubidaBadge
-                          value={o.estadoSubida}
+                          value={
+                            o.estadoSubida
+                          }
                         />
                       </td>
 
-                      <td style={{ padding: "10px 12px" }}>
+                      <td
+                        style={{
+                          padding:
+                            "10px 12px"
+                        }}
+                      >
                         <ResultadoBadge
-                          value={o.resultado}
+                          value={
+                            o.resultado
+                          }
                         />
                       </td>
                     </tr>
@@ -776,6 +947,64 @@ Para "delete":
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "export" && (
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 1100
+          }}
+        >
+          <div
+            style={{
+              background: "#1e293b",
+              borderRadius: 16,
+              border:
+                "1px solid #334155",
+              padding: 32,
+              textAlign: "center"
+            }}
+          >
+            <div
+              style={{
+                fontSize: 48,
+                marginBottom: 16
+              }}
+            >
+              📊
+            </div>
+
+            <div
+              style={{
+                color: "#f1f5f9",
+                fontWeight: 700,
+                fontSize: 20,
+                marginBottom: 8
+              }}
+            >
+              Exportar a Excel
+            </div>
+
+            <button
+              onClick={exportToCSV}
+              style={{
+                background:
+                  "linear-gradient(135deg,#22c55e,#16a34a)",
+                border: "none",
+                borderRadius: 12,
+                padding:
+                  "14px 32px",
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: 16,
+                cursor: "pointer"
+              }}
+            >
+              ⬇️ Descargar CSV
+            </button>
           </div>
         </div>
       )}
