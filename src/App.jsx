@@ -269,7 +269,7 @@ Para "delete": {"id":N}.`;
                         <tr key={o.id} style={{ background:i%2===0?"transparent":"#0f172a33", borderBottom:"1px solid #1e293b" }}>
                           <td style={{ padding:"10px 12px", color:"#64748b", fontWeight:700 }}>{i+1}</td>
                           <td style={{ padding:"10px 12px", color:"#94a3b8", maxWidth:140 }}>
-                            <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={o.entidad}>{o.entidad}</div>
+                            <a href="https://www.compraspublicas.gob.ec/ProcesoContratacion/compras/PC/buscarProceso.cpe?sg=1" target="_blank" rel="noreferrer" style={{ color:"#94a3b8", textDecoration:"none", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", display:"block" }} title={o.entidad} onMouseEnter={e=>e.target.style.color="#3b82f6"} onMouseLeave={e=>e.target.style.color="#94a3b8"}>{o.entidad}</a>
                           </td>
                           <td style={{ padding:"10px 12px", color:"#e2e8f0", fontWeight:600, maxWidth:200 }}>
                             <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={o.proyecto}>{o.proyecto}</div>
