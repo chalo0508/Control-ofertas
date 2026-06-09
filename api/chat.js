@@ -13,7 +13,7 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'nvidia/nemotron-3-nano-omni:free',
+        model: 'nex-agi/nex-n2-pro:free',
         messages: [
           { role: 'system', content: system },
           ...messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
